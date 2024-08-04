@@ -6,6 +6,7 @@ import { collection, doc, getDocs, query, setDoc, deleteDoc, getDoc, updateDoc }
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
+import { Analytics } from "@vercel/analytics/react"
 
 const style = {
   position: 'absolute',
