@@ -164,7 +164,7 @@ export default function Page() {
             color="#2C3E50" // Change the text color
             fontSize="2rem" // Increase font size
           >
-            Welcome to AB Pantry
+            Aman Pantry
           </Typography>
           <Typography variant="h4" textAlign="center" marginBottom={2}>
             {isRegistering ? 'Create Account' : 'Login'}
