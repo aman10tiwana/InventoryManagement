@@ -1,10 +1,11 @@
 'use client'
 import { useState, useEffect } from 'react';
-import { Box, Stack, Typography, Button, Card, CardContent,Modal, TextField  } from '@mui/material';
-import { Delete as DeleteIcon } from '@mui/icons-material'; // Import Material-UI icons for better visuals
+import { Box, Stack, Typography, Button, Modal, TextField, MenuItem, Select, FormControl, InputLabel, Card, CardContent } from '@mui/material';
 import { firestore, auth } from '@/firebase';
-import { collection, doc, getDocs, query, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, setDoc, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
 
 const style = {
   position: 'absolute',
@@ -23,13 +24,17 @@ const style = {
 
 export default function Page() {
   const [inventory, setInventory] = useState([]);
+  const [filteredInventory, setFilteredInventory] = useState([]);
   const [open, setOpen] = useState(false);
   const [itemName, setItemName] = useState('');
+  const [category, setCategory] = useState('');
+  const [quantity, setQuantity] = useState(1); // New state for quantity
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [user, setUser] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -40,6 +45,14 @@ export default function Page() {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    setFilteredInventory(
+      inventory.filter((item) =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    );
+  }, [searchTerm, inventory]);
 
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
@@ -55,18 +68,29 @@ export default function Page() {
       });
     });
     setInventory(inventoryList);
+    setFilteredInventory(inventoryList); // Set filtered inventory on load
+  
   };
 
-  const addItem = async (item) => {
+  const addItem = async (item, category, quantity) => {
     const docRef = doc(collection(firestore, 'inventory'), item);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      const { quantity } = docSnap.data();
-      await setDoc(docRef, { quantity: quantity + 1 });
+      const { quantity: existingQuantity } = docSnap.data();
+      await setDoc(docRef, { quantity: existingQuantity + quantity, category }, { merge: true });
     } else {
-      await setDoc(docRef, { quantity: 1 });
+      await setDoc(docRef, { quantity, category });
     }
     await updateInventory();
+  };
+
+  const updateItemQuantity = async (item, newQuantity) => {
+    const docRef = doc(collection(firestore, 'inventory'), item);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      await updateDoc(docRef, { quantity: newQuantity });
+      await updateInventory();
+    }
   };
 
   const removeItem = async (item) => {
@@ -77,7 +101,7 @@ export default function Page() {
       if (quantity === 1) {
         await deleteDoc(docRef);
       } else {
-        await setDoc(docRef, { quantity: quantity - 1 });
+        await setDoc(docRef, { quantity: quantity - 1 }, { merge: true });
       }
     }
     await updateInventory();
@@ -118,14 +142,14 @@ export default function Page() {
         justifyContent="center"
         alignItems="center"
         sx={{
-          backgroundImage: 'url(/images/pic6.jpg)', // Use a valid image path
+          backgroundImage: `url('/images/pic6.jpg')`, // Use backticks for template literals
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
       >
         <Box
           width={400}
-          bgcolor="rgba(255, 255, 255, 0.8)"
+          bgcolor="rgba(255, 255, 255, 0.8)" // Semi-transparent background
           p={4}
           display="flex"
           flexDirection="column"
@@ -142,7 +166,7 @@ export default function Page() {
           >
             Welcome to Aman's Pantry Management
           </Typography>
-          <Typography variant="h4" textAlign="center">
+          <Typography variant="h4" textAlign="center" marginBottom={2}>
             {isRegistering ? 'Create Account' : 'Login'}
           </Typography>
           <TextField
@@ -186,12 +210,13 @@ export default function Page() {
       alignItems="center"
       gap={2}
       sx={{
-        backgroundImage: 'url(/images/pic6.webp)', // Use a valid image path
+        backgroundImage: `url('/images/vegetables.jpeg')`, // Use backticks for template literals
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
+      padding={2}
     >
-      <Button variant="contained" onClick={handleLogout}>
+    <Button variant="contained" onClick={handleLogout}>
         Logout
       </Button>
       <Modal
@@ -201,10 +226,15 @@ export default function Page() {
         aria-describedby="modal-modal-description"
       >
         <Box sx={style}>
-          <Typography id="modal-modal-title" variant="h6" component="h2">
-            Add Item
-          </Typography>
-          <Stack width="100%" direction="row" spacing={2}>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography id="modal-modal-title" variant="h6" component="h2">
+              Add Item
+            </Typography>
+            <Button onClick={handleClose}>
+              <CloseIcon />
+            </Button>
+          </Box>
+          <Stack width="100%" direction="column" spacing={2}>
             <TextField
               id="outlined-basic"
               label="Item"
@@ -213,11 +243,44 @@ export default function Page() {
               value={itemName}
               onChange={(e) => setItemName(e.target.value)}
             />
+            <FormControl variant="outlined" fullWidth>
+              <InputLabel id="category-label">Category</InputLabel>
+              <Select
+                labelId="category-label"
+                id="category-select"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                label="Category"
+              >
+                <MenuItem value="Fruits">Fruits</MenuItem>
+                <MenuItem value="Vegetables">Vegetables</MenuItem>
+                <MenuItem value="Dairy">Dairy</MenuItem>
+                <MenuItem value="Beverages">Beverages</MenuItem>
+                <MenuItem value="Snacks">Snacks</MenuItem>
+                <MenuItem value="Oil & Vinegar">Oil & Vinegar</MenuItem>
+                <MenuItem value="Bakery">Bakery</MenuItem>
+                <MenuItem value="Grains">Grains</MenuItem>
+                <MenuItem value="Spices">Spices</MenuItem>
+                <MenuItem value="Condiments">Condiments</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              id="quantity-input"
+              label="Quantity"
+              variant="outlined"
+              type="number"
+              fullWidth
+              value={quantity}
+              onChange={(e) => setQuantity(parseInt(e.target.value))}
+              inputProps={{ min: 1 }}
+            />
             <Button
               variant="outlined"
               onClick={() => {
-                addItem(itemName);
+                addItem(itemName, category, quantity);
                 setItemName('');
+                setCategory('');
+                setQuantity(1);
                 handleClose();
               }}
             >
@@ -229,43 +292,88 @@ export default function Page() {
       <Button variant="contained" onClick={handleOpen}>
         Add New Item
       </Button>
-      <Box border="1px solid #333">
+      <TextField
+      label="Search Items"
+      variant="outlined"
+      fullWidth
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      sx={{
+        maxWidth: '400px',
+        mb: 2,
+        backgroundColor: '#fff', // White background
+        borderRadius: 2, // Rounded corners
+        '& .MuiOutlinedInput-root': {
+          '& fieldset': {
+            borderColor: '#aaa', // Light border color
+          },
+          '&:hover fieldset': {
+            borderColor: '#333', // Darker border on hover
+          },
+          '&.Mui-focused fieldset': {
+            borderColor: '#007BFF', // Blue border when focused
+          },
+        },
+        padding: 1, // Add padding
+        boxShadow: 2, // Shadow for depth
+      }}
+    />
+      <Box border="1px solid #333" borderRadius={2} overflow="auto" >
         <Box
           width="800px"
           height="100px"
-          bgcolor="#ADD8E6"
+          bgcolor="#7cb06d"
           display="flex"
           justifyContent="center"
           alignItems="center"
+          border="1px solid #333" borderRadius={2}
         >
-          <Typography variant="h2" color="#333" textAlign="center">
-            Inventory Items
+          <Typography variant="h2" textAlign="center" 
+            color="#2C3E50" // Change the text color
+            fontSize="2.5rem" // Increase font size
+          >
+            Pantry List
           </Typography>
         </Box>
-        <Stack width="800px" spacing={2} sx={{ overflowY: 'auto', maxHeight: '300px' }}>
-        {inventory.map(({ name, quantity }) => (
-          <Card key={name} variant="outlined" sx={{ display: 'flex', justifyContent: 'space-between', padding: 2 }}>
-            <CardContent sx={{ flex: 1 }}>
-              <Typography variant="h4" color="#333">
+        <Stack width="800px" spacing={2} sx={{ overflowY: 'auto', flexGrow: 1 }}>
+          {filteredInventory.map(({ name, quantity, category }) => (
+            <Card key={name} variant="outlined" sx={{ display: 'flex', justifyContent: 'space-between', padding: 2, flexDirection: 'row', flexWrap: 'nowrap' }}>
+            <CardContent sx={{ flexGrow: 1, minWidth: 0 }}> {/* Ensure minWidth is 0 to allow text to wrap properly */}
+              <Typography variant="h4" color="#333" noWrap sx={{
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  }}  > {/* Use noWrap to prevent overflow */}
                 {name.charAt(0).toUpperCase() + name.slice(1)}
               </Typography>
-              <Typography variant="body1" color="#666">
+              <Typography variant="body1" color="#666" noWrap>
                 Quantity: {quantity}
               </Typography>
+              <Typography variant="body2" color="#999" noWrap>
+                Category: {category}
+              </Typography>
             </CardContent>
-            <Button
-              variant="contained"
-              color="error"
-              onClick={() => removeItem(name)}
-              startIcon={<DeleteIcon />}
-            >
-              Remove
-            </Button>
+            <Box display="flex" alignItems="center" gap={1}>
+              <TextField
+                id={`update-quantity-${name}`}
+                label="Quantity"
+                variant="outlined"
+                type="number"
+                value={quantity}
+                onChange={(e) => updateItemQuantity(name, parseInt(e.target.value))}
+                inputProps={{ min: 1 }}
+                size="small"
+                sx={{ width: 100 }}
+              />
+              <Button variant="contained" color="error" onClick={() => removeItem(name)} startIcon={<DeleteIcon />}>
+                Remove
+              </Button>
+            </Box>
           </Card>
-        ))}
-      </Stack>
+          
+          ))}
+        </Stack>
       </Box>
     </Box>
   );
 }
-
